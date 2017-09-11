@@ -1,5 +1,6 @@
+export {AdbMessage, AdbResponse, SYNC, CONNECTION, AUTH, OPEN, OKAY, CLOSE, WRITE, MESSAGE_SIZE};
 
-export const
+const
     SYNC = 'SYNC',
     CONNECTION = 'CNXN',
     AUTH = 'AUTH',
@@ -67,8 +68,12 @@ class AdbMessage {
     }
 
     send(adb_interface) {
-        let packed_message = this.pack();
+        let packed_message = this.pack(),
+            text_encoder = new TextEncoder();
         adb_interface.send(packed_message);
+        if (this.data) {
+            adb_interface.send(text_encoder.encode(this.data));
+        }
     }
 }
 
@@ -83,5 +88,24 @@ class AdbResponse {
         this.data_length = dv.getInt32(12, true);
         this.checksum = dv.getInt32(16, true);
         this.magic = dv.getInt32(20, true);
+        this.data = null;
+    }
+
+    get text() {
+        if (!this.data) return '';
+        let text_decoder = new TextDecoder();
+        return text_decoder.decode(this.data);
+    }
+
+    async fetch_data(adb_interface) {
+        let data_left = this.data_length,
+            final_data = new ArrayBuffer(this.data_length),
+            data_view = new Int8Array(final_data);
+        while (data_left > 0) {
+            let buffer = await adb_interface.read(data_left);
+            data_view.set(buffer, this.data_length - data_left);
+            data_left -= buffer.length;
+        }
+        this.data = final_data;
     }
 }
