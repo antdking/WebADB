@@ -33,7 +33,6 @@ export class AdbInterface {
 
     static async new_device() {
         let device = await AdbConnector.request_device(),
-            _ = console.log(device),
             connector = new AdbConnector(device),
             interface_number = await connector.connect_to_interface(),
             alternate = device.configuration.interfaces[interface_number].alternate,
@@ -42,9 +41,7 @@ export class AdbInterface {
         await device.clearHalt('in', endpoints['read']);
         console.log('clearing');
         await device.clearHalt('out', endpoints['write']);
-        console.log('flushing');
-        await device.transferIn(endpoints['read'], 512);
-        console.log('done');
+        console.log('cleared');
         return new AdbInterface(
             device,
             interface_number,
