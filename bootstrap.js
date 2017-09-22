@@ -1,5 +1,6 @@
-import {AdbInterface} from './src/interface.js';
 
+
+import {AdbInterface} from "./src/interface.js";
 
 document.getElementById('inputCatcher').addEventListener('click', async e => {
     let adb_interface = await AdbInterface.new_device();

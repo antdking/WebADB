@@ -1,7 +1,7 @@
 import {AdbConnector} from './connector.js';
 import {AdbMessage, AdbResponse, CONNECTION, AUTH, MESSAGE_SIZE} from "./message.js";
 import {MAX_ADB_DATA, VERSION} from "./constants.js";
-import {AUTH_RSAPUBLICKEY, AUTH_SIGNATURE} from "./constants.js";
+import {AUTH_RSAPUBLICKEY, AUTH_SIGNATURE, AUTH_TOKEN} from "./constants.js";
 
 
 export class AdbInterface {
@@ -22,7 +22,7 @@ export class AdbInterface {
                     name: "RSASSA-PKCS1-v1_5",
                     modulusLength: 2048,
                     publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
-                    hash: {name: "SHA-256"},
+                    hash: {name: "SHA-1"},
                 },
                 false,
                 ["sign", "verify"],
@@ -38,9 +38,9 @@ export class AdbInterface {
             alternate = device.configuration.interfaces[interface_number].alternate,
             endpoints = AdbConnector.get_endpoint_numbers(alternate);
         //console.log('clearing');
-        await device.clearHalt('in', endpoints['read']);
+        //await device.clearHalt('in', endpoints['read']);
         console.log('clearing');
-        await device.clearHalt('out', endpoints['write']);
+        //await device.clearHalt('out', endpoints['write']);
         console.log('cleared');
         return new AdbInterface(
             device,
@@ -55,18 +55,13 @@ export class AdbInterface {
         await msg.send(this);
         let final_response = null;
         for (let attempt=0; attempt < read_attempts; attempt++) {
-            let buffer = await this.read(MESSAGE_SIZE);
-            console.log(buffer);
-            let response = new AdbResponse(buffer);
-            console.log(response);
-            await response.fetch_data(this);
+            let response = await AdbResponse.from_device(this);
             if ([CONNECTION, AUTH].indexOf(response.command) !== -1) {
                 final_response = response;
                 break;
             }
         }
         if (!final_response) throw Error("Can't read connection response");
-        console.log(final_response);
         if (final_response.command === AUTH) {
             await this.handle_auth(final_response);
         }
@@ -80,19 +75,19 @@ export class AdbInterface {
             throw Error("Unknown auth response");
         }
 
+        console.log(signed_token);
         msg = new AdbMessage(AUTH, AUTH_SIGNATURE, 0, signed_token);
         await msg.send(this);
-        response = new AdbResponse(await this.read(MESSAGE_SIZE));
+        console.log('sent');
+        response = await AdbResponse.from_device(this);
         console.log(response);
-        await response.fetch_data(this);
 
         if (response.command === CONNECTION)
             return;
 
         msg = new AdbMessage(AUTH, AUTH_RSAPUBLICKEY, 0, rsa_key.publicKey + '\0');
         await msg.send(this);
-        response = new AdbResponse(await this.read(MESSAGE_SIZE));
-        await response.fetch_data(this);
+        response = await AdbResponse.from_device(this);
         if (response.command !== CONNECTION)
             console.log(response);
     }
@@ -101,6 +96,7 @@ export class AdbInterface {
         return await this.device.transferOut(this._write_endpoint, buffer);
     }
     async read(data_length) {
-        return await this.device.transferIn(this._read_endpoint, data_length);
+        let resp = await this.device.transferIn(this._read_endpoint, data_length);
+        return resp;
     }
 }
